@@ -8,21 +8,45 @@
 // ==/UserScript==
 
 // Filter Specifications
-	var People = {
+	console.log("INCIF Loading Filters...");
+	
+	var Filters = {
 		"ignore":{
-			"xavier woods":"", 
+			"Xavier Woods":"", 
 			"john":"", 
-			"tulpa":"",
-			"Randian":{"address":"http://libertariansteve.blogspot.com", "name":""}  //Just an address test :)
+			"Tulpa":"",
+			"Whacko":{"address":"24ahead.com"}
 		}
 	};
-
+	
+	var Ignore_Whole_Trees = true;  
+	var Allow_Comment_Opening = true;
+	
+	console.log("...INCIF Filters Loaded.");
 // The Setup and functions
 	var Q = jQuery.noConflict();
+
+	Q.each(Filters, function(name, section) {
+		Q.each(section, function(key, val) {
+			if (val == "") {
+				Filters[name][key] = {"name":key, "address":""};
+			}
+			if (!Filters[name][key].name)		{ Filters[name][key]["name"] = "";}
+			if (!Filters[name][key].address)	{ Filters[name][key]["address"] = "";}
+		});
+	});
 
 	String.prototype.trim = function() {
 		return(this.replace(/^\s+/,'').replace(/\s+$/,''));
 	};
+	
+	var simplifyAddress = function(anAddress) {
+		var addy = anAddress.trim().replace("mailto:", "").replace("http://", "");
+		if (addy.substring(addy.length - 1) == "/") {
+			addy = addy.substring(0, addy.length - 1);
+		}
+		return addy;
+	}
 	
 	var Comment = function (div) {
 		var poster = (function(comment) {
@@ -31,12 +55,12 @@
 			var a = {};
 			if (credit.find("a").length > 0) {
 				a = credit.find("a");
-				poster = {"name":a.text().trim(), "address":a.attr("href").trim()};
+				poster = {"name":a.text().trim(), "address":simplifyAddress(a.attr("href"))};
 			} else {
 				poster = {"name":credit.text().trim(), "address":""};
 			}
 			poster.within = function(collection) {
-				var result = false;
+				var result = [];
 				var anyMatch = function (first, second) {
 					return	(first != "" && second != "")
 							&&
@@ -44,7 +68,7 @@
 				};
 				Q.each(collection, function(label, info) {
 					if (anyMatch(info.name, poster.name) || anyMatch(info.address, poster.address)) {
-						result = true;
+						result.push(label);
 						return false;
 					}
 				});
@@ -71,14 +95,20 @@
 				next = next.next();
 			}			
 		};		
-		return {"node":div, "poster":poster, "depth":depth, "kids":kids};
+		return {
+			"node":div, "poster":poster, "depth":depth, "kids":kids, "label":""
+		};
 	};
 	
 	var Action = {
 		"ignore":function(comment) {
 			var node = comment.node;
+			var label = comment.label;
+			if (label == "") {
+				label = comment.poster.name;
+			}
 			if (!node.is(".INCIF-ignore")) {
-				node.prepend('<div><span class="open">' + comment.poster.name + '</span></span><span class="close">[ CLOSE ]</span></div>');
+				node.prepend('<div><span class="open">' + label + '</span></span><span class="close">[ CLOSE ]</span></div>');
 				node.addClass("INCIF-ignore");
 			}
 		}
@@ -86,13 +116,13 @@
 	
 	GM_addStyle( 
 		".INCIF-ignore {" + 
-			"padding:0; line-height:1em; " + 
+			"padding:0; line-height:0.5em; " + 
 		"}\n" + 
 		".INCIF-ignore div {" +
-			"vertical-align:top; font-style:italic; margin:0; padding:0; font-size:7pt; line-height:1em; color:silver;" + 
+			"vertical-align:top; font-style:italic; margin:0; padding:0; font-size:7pt; line-height:0.5em; padding-bottom:0.25em; color:silver;" + 
 		"}\n" + 
 		"span.open {" +
-			"cursor:pointer; display:none;"+ 
+			"display:none;"+ 
 		"}\n" + 
 		"span.close {" +
 			"cursor:pointer; color:green;"+ 
@@ -103,45 +133,49 @@
 		".INCIF-ignore div span.close {" +
 			"display:none;"+ 
 		"}\n" + 
-		".INCIF-ignore h2, .INCIF-ignore p, .INCIF-ignore button {" +
+		".INCIF-ignore h2, .INCIF-ignore p, .INCIF-ignore button, .INCIF-ignore blockquote {" +
 			"display:none;" +
 		"}\n"	
 	);
+
 // The Action
 	console.log("INCIF Starting...");
 	
-	Q.each(People, function(name, section) {
-		Q.each(section, function(key, val) {
-			if (val == "") {
-				People[name][key] = {"name":key, "address":""};
-			}
-			if (!People[name][key].name)		{ People[name][key]["name"] = "";}
-			if (!People[name][key].address)	{ People[name][key]["address"] = "";}
-		});
-	});
-
+	var toIgnore = [];
 	Q.each(Q(".comments .com-block"), function () {
 		var comment = Comment(Q(this));
-		if (comment.poster.within(People.ignore)) {
-			Action.ignore(comment);
-			comment.kids(Action.ignore);
+		var hit = comment.poster.within(Filters.ignore)
+		if (hit.length > 0) {
+			comment.label = hit[0];
+			toIgnore.push(comment);
 		}
 	});
+	Q.each(toIgnore, function () {
+		Action.ignore(this);
+	});
 	
-	// If you REALLY want to worry with things best ignored...
-	Q("head").append(
-		'<script type="text/javascript">\n' +
-		'	jQuery(function () {		\n' +
-		'			jQuery(".INCIF-ignore div").click(function () {;' +
-		'				var div = jQuery(this.parentNode);		\n' +
-		'				if (div.is(".INCIF-ignore")) {		\n' +
-		'					div.removeClass("INCIF-ignore");		\n' +
-		'				} else {		\n' +
-		'					div.addClass("INCIF-ignore")		\n' +
-		'				}		\n' +
-		'			});		\n' +
-		'	});		\n' +
-		'</script>'
-	);
+	if (Ignore_Whole_Trees) {
+		Q.each(toIgnore, function () {
+			this.kids(Action.ignore);
+		});
+	}
+	if (Allow_Comment_Opening) {
+		// If you REALLY want to worry with things best ignored...
+		GM_addStyle("INCIF-ignore span.open {cursor:pointer;}\n");
+		Q("head").append(
+			'<script type="text/javascript">\n' +
+			'	jQuery(function () {		\n' +
+			'			jQuery(".INCIF-ignore div").click(function () {;' +
+			'				var div = jQuery(this.parentNode);		\n' +
+			'				if (div.is(".INCIF-ignore")) {		\n' +
+			'					div.removeClass("INCIF-ignore");		\n' +
+			'				} else {		\n' +
+			'					div.addClass("INCIF-ignore")		\n' +
+			'				}		\n' +
+			'			});		\n' +
+			'	});		\n' +
+			'</script>'
+		);
+	}
 	
 	console.log("...INCIF Successfully Completed");
