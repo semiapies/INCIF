@@ -7,7 +7,7 @@ The Indisputably Non-Coercive Idiot Filter for Hit & Run.
 What's It Do?
 -------------
 
-This is a script that allows you to filter out comments by specific posters of your choice while reading Reason's Hit & Run comments section. It saves you countless time and frustration by hidding trollish inanity.
+This is a script that allows you to filter out comments by specific posters of your choice while reading Reason's Hit & Run comments section. It saves you countless time and frustration by hiding trollish inanity.
 
 
 What Do I Need?
