@@ -3,7 +3,9 @@
 // @description   Comment-filtering and enhancement for Hit & Run - Version 0.4 - New Site Layout!
 // @namespace     tag:semiapies@gmail.com,2006-05-15,hitandrun
 // @include       http://*.reason.com/blog/*
+// @include       http://*.reason.com/archives/*
 // @include       http://reason.com/blog/*
+// @include       http://reason.com/archives/*
 // @require		  http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js
 // ==/UserScript==
 
