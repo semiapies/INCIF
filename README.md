@@ -17,7 +17,7 @@ First, you'll need the [Firefox browser](http://www.mozilla.com/firefox/) and th
 
 Install Firefox first, then go to the Greasemonkey page to install that plugin.  When it asks you to restart Firefox, let it. 
 
-Second, you'll need one of the scripts on this site, INCIF.user.js (the release version) or TEST.user.js (the test version).  Save whichever script you want somewhere you can find it.
+Second, you'll the script on this site, INCIF.user.js, which is the updated release version.
 
 
 How Do I Work This?
@@ -45,7 +45,7 @@ Let's say you want to filter someone by name - some guy who goes by "Ubershmuck"
 		}
 	};
 
-Alternately, if you're using the TEST version, you can be lazy and just put in his name and a few quotes, like this:
+Alternately, you can be lazy and just put in his name and a few quotes, like this:
 
 	var Filters = {
 		"ignore":{

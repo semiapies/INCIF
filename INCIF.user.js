@@ -1,176 +1,181 @@
 // ==UserScript==
 // @name          INCIF
-// @description   Comment-filtering and enhancement for Hit & Run - Version 0.3.2 - New Site Layout!
+// @description   Comment-filtering and enhancement for Hit & Run - Version 0.4 - New Site Layout!
 // @namespace     tag:semiapies@gmail.com,2006-05-15,hitandrun
 // @include       http://*.reason.com/blog/*
+// @include       http://*.reason.com/archives/*
 // @include       http://reason.com/blog/*
+// @include       http://reason.com/archives/*
+// @require		  http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js
 // ==/UserScript==
 
 // Filter Specifications
-
-
-var Filters = {
-	"Ignore": [
-		{
-			"label":"dave w.", 
-			"address":["www.farces", "wannamo.com"], 
-			"name":["Dave W.", "S. Franklin", "Sam Franklin"]
-		},
-		{"label":"sarcastro", "name":"Dan T."},
-		{"label":"jersey", "address":"jerseymcjones@gmail.com"},
-		{"label":"gopher boy", "address":["peleus@aol.com", "john.kluge@us.army.mil"]}
-	]
-};
-var Actions = {
-	'Ignore': {
-		"setup":function() {
-			GM_addStyle( 
-				"div.INCIF-Ignore {" +
-				"	font-style:italic; font-size:7pt; color:silver;" + 
-				"	padding:0; line-height:auto; height:auto;" +
-				"	text-align:center;" +
-				"}"
-			);
-		},
-		"apply":function (div, spec) {
-			Style.appendClass(div, 'INCIF-Ignore');
-			if (spec['label'] == undefined) {
-				div.innerHTML = 'filtered comment';	
-			} else {
-				div.innerHTML = 'comment by ' + spec['label'] + '';
-			}
-		}
-	}
-};
-// The contents of this variable will be autofilled in the comments information fields (eg your screenname, email address, homepage URL)
-var Ident = {
-	"Name:":"", "Email:":"", 
-	"URL:":""
-};
-
-
-//************************************************************************************
-// Do not modify anything below this point
-//************************************************************************************
-
-// Library Objects (convenient holders of functions)
-	NodeTypes = {
-		1:"element", 2:"attribute", 3:"text", 8:"comment", 9:"document", 10:"DTD"
-	}
-	for (key in NodeTypes) {
-		NodeTypes[NodeTypes[key]] = key;  // Makes the association bi-directional 
-	}
+	console.log("INCIF Loading Filters...");
 	
-	Style = {
-		"appendClass":function (obj, name) {
-			obj.className += (' ' + name); 
-		},
-		"setFor":function (obj, text){
-			obj.style.cssText = text;
+	var Filters = {
+		"ignore":{
+			"john":"", 
+			"Whacko":{"address":"24ahead.com"}
 		}
-	}
-	Xpath = {
-		"find":function (query) {
-			return document.evaluate(
-				query, document, null,
-				XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
-			);
-		},
-		"doToAll":function (query, func) {
-			var selected = Xpath.find(query)
-			for (i=0; i < selected.snapshotLength; i++) {
-				func(selected.snapshotItem(i));
-			}	
-		}
-	}
-	Matching = {
-		"check":function (test, target) {
-			return	target && test && (test != '') 
-					&& 
-					(test.toUpperCase().indexOf(target.toUpperCase()) != -1); 
-		},
-		"findAny":function (test, target) {
-			var i = 0;
-			var result = false;
-			if (!target) {
-				return result;
+	};
+	
+	var Ignore_Whole_Trees = true;  
+	var Allow_Comment_Opening = true;
+	
+	console.log("...INCIF Filters Loaded.");
+// The Setup and functions
+	var Q = jQuery.noConflict();
+
+	Q.each(Filters, function(name, section) {
+		Q.each(section, function(key, val) {
+			if (val == "") {
+				Filters[name][key] = {"name":key, "address":""};
 			}
-			if (target.substr) {
-				result = Matching.check(test, target); 
-			} else if (target.length) {
-				for (i=0; i < target.length; i++) {
-					result = Matching.check(test, target[i]);
-					if (result) {break;}
-				}
-			} else {
-				;
-			}
-			return result;
-		}
-	}
+			if (!Filters[name][key].name)		{ Filters[name][key]["name"] = "";}
+			if (!Filters[name][key].address)	{ Filters[name][key]["address"] = "";}
+		});
+	});
+
 	String.prototype.trim = function() {
 		return(this.replace(/^\s+/,'').replace(/\s+$/,''));
+	};
+	
+	var simplifyAddress = function(anAddress) {
+		var addy = anAddress.trim().replace("mailto:", "").replace("http://", "");
+		if (addy.substring(addy.length - 1) == "/") {
+			addy = addy.substring(0, addy.length - 1);
+		}
+		return addy;
 	}
-	Form = {
-		"getFormName":function(labelText) {
+	
+	var Comment = function (div) {
+		var poster = (function(comment) {
+			var credit = comment.find("h2 strong");
+			var poster = {};
+			var a = {};
+			if (credit.find("a").length > 0) {
+				a = credit.find("a");
+				poster = {"name":a.text().trim(), "address":simplifyAddress(a.attr("href"))};
+			} else {
+				poster = {"name":credit.text().trim(), "address":""};
+			}
+			poster.within = function(collection) {
+				var result = [];
+				var anyMatch = function (first, second) {
+					return	(first != "" && second != "")
+							&&
+							(first.toLowerCase() == second.toLowerCase());
+				};
+				Q.each(collection, function(label, info) {
+					if (anyMatch(info.name, poster.name) || anyMatch(info.address, poster.address)) {
+						result.push(label);
+						return false;
+					}
+				});
+				return result;
+			};
+			return poster;
+		})(div);
+		var depth = (function(node) {
+			var classes = node.attr("class").toString().split(" ");
 			var result = "";
-			Xpath.doToAll("//label", function(label) {
-				if (label.innerHTML == labelText) {
-					result = label.htmlFor;
+			Q.each(classes, function() {
+				if (this.indexOf("depth") == 0) {
+					result = parseInt(this.replace("depth", ""));
+					return false;
 				}
 			});
 			return result;
-		},
-		"getFormElem":function(labelText) {
-			var name = Form.getFormName(labelText);
-			if (name != "") {
-				return Xpath.find("//input[@name='" + name + "']").snapshotItem(0);
+		})(div);
+		
+		var kids = function (func) {
+			var next = div.next(); 
+			while (next.length > 0 && depth < Comment(next).depth) {
+				func(Comment(next));
+				next = next.next();
+			}			
+		};		
+		return {
+			"node":div, "poster":poster, "depth":depth, "kids":kids, "label":""
+		};
+	};
+	
+	var Action = {
+		"ignore":function(comment) {
+			var node = comment.node;
+			var label = comment.label;
+			if (label == "") {
+				label = comment.poster.name;
 			}
-		},
-		"set":function(labelText, value) {
-			var item = Form.getFormElem(labelText);
-			item.value = value;
+			if (!node.is(".INCIF-ignore")) {
+				node.prepend('<div><span class="open">' + label + '</span></span><span class="close">[ CLOSE ]</span></div>');
+				node.addClass("INCIF-ignore");
+			}
 		}
 	};
 	
-// Actual Filtering
-	// This runs any setup code for Actions
-		for (action in Actions) {
-			if (Actions[action]["setup"] != undefined) {
-				Actions[action].setup();
-			}
-		}
+	GM_addStyle( 
+		".INCIF-ignore {" + 
+			"padding:0; line-height:0.5em; " + 
+		"}\n" + 
+		".INCIF-ignore div {" +
+			"vertical-align:top; font-style:italic; margin:0; padding:0; font-size:7pt; line-height:0.5em; padding-bottom:0.25em; color:silver;" + 
+		"}\n" + 
+		"span.open {" +
+			"display:none;"+ 
+		"}\n" + 
+		"span.close {" +
+			"cursor:pointer; color:green;"+ 
+		"}\n" + 
+		".INCIF-ignore div span.open {" +
+			"display:inline;"+ 
+		"}\n" + 
+		".INCIF-ignore div span.close {" +
+			"display:none;"+ 
+		"}\n" + 
+		".INCIF-ignore h2, .INCIF-ignore p, .INCIF-ignore button, .INCIF-ignore blockquote {" +
+			"display:none;" +
+		"}\n"	
+	);
+
+// The Action
+	console.log("INCIF Starting...");
 	
-	// This actually goes over all the comments and applies Actions for people matching Filters.
-		Xpath.doToAll("//div[@class='com-blck']|//div[@class='white-com-blck']", function(div) {
-			var p = div.childNodes[0];
-			var a = {};
-			var link = "";
-			var name = "";
-			var filterType = {};
-			var filter = {};
-			var i = 0;
-			if (p.childNodes[0].nodeType == NodeTypes.element) {
-				a = p.childNodes[0];
-				link = a.href;
-				name = a.innerHTML;
-			} else {
-				name = p.innerHTML.split('|')[0].trim(); // No email or web site, so no link in this case
-			}
-			for (filterType in Filters) {
-				for (i=0; i < Filters[filterType].length; i++) {
-					filter = Filters[filterType][i];
-					if (Matching.findAny(link, filter['address']) || Matching.findAny(name, filter['name'])) {
-						Actions[filterType].apply(div, filter);
-						break;
-					}
-				}
-			}
+	var toIgnore = [];
+	Q.each(Q(".comments .com-block"), function () {
+		var comment = Comment(Q(this));
+		var hit = comment.poster.within(Filters.ignore)
+		if (hit.length > 0) {
+			comment.label = hit[0];
+			toIgnore.push(comment);
+		}
+	});
+	Q.each(toIgnore, function () {
+		Action.ignore(this);
+	});
+	
+	if (Ignore_Whole_Trees) {
+		Q.each(toIgnore, function () {
+			this.kids(Action.ignore);
 		});
+	}
+	if (Allow_Comment_Opening) {
+		// If you REALLY want to worry with things best ignored...
+		GM_addStyle("INCIF-ignore span.open {cursor:pointer;}\n");
+		Q("head").append(
+			'<script type="text/javascript">\n' +
+			'	jQuery(function () {		\n' +
+			'			jQuery(".INCIF-ignore div").click(function () {;' +
+			'				var div = jQuery(this.parentNode);		\n' +
+			'				if (div.is(".INCIF-ignore")) {		\n' +
+			'					div.removeClass("INCIF-ignore");		\n' +
+			'				} else {		\n' +
+			'					div.addClass("INCIF-ignore")		\n' +
+			'				}		\n' +
+			'			});		\n' +
+			'	});		\n' +
+			'</script>'
+		);
+	}
 	
-// Autofilling form fields
-	for (field in Ident) {
-		if (Ident[field] != "") {
-			Form.set(field, Ident[field]);
-		}
-	};
+	console.log("...INCIF Successfully Completed");
